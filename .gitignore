@@ -1,0 +1,10 @@
+# Ignore Jupyter checkpoints
+*.ipynb_checkpoints
+
+# Ignore plots and results, git is for code.
+energy-test/plots/*
+energy-test/results/*
+
+# Ignore raw/processed data
+*.root
+*_20000.txt
