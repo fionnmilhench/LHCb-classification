@@ -1,0 +1,48 @@
+#!/usr/bin/env ganga
+
+import argparse
+import os
+import tarfile
+
+parser = argparse.ArgumentParser(
+    prog='submit-ganga', description='Manages grid job submission')
+parser.add_argument('-p', '--platform',type=str, default='x86_64-centos7-gcc9-opt')
+parser.add_argument('-o', '--output', type=str, default='*.txt')
+parser.add_argument('-j', '--jobname', type=str, default='test job')
+parser.add_argument('-i', '--initjob', type=int, required=True)
+parser.add_argument('-f', '--finaljob', type=int, required=True)
+parser.add_argument('--backend', type=str, required=True, choices = ['dirac','local','interactive'])
+parser.add_argument('command', type=str, nargs='+')
+
+args = parser.parse_args()
+backend = args.backend
+command = ' '.join(args.command)
+
+print('Creating job')
+j = Job(name=args.jobname)
+j.application = Executable()
+j.application.exe = File('remotescript.sh')
+j.inputfiles = [LocalFile('testinput.txt')]
+
+if backend == 'interactive' or backend == 'local':
+    j.backend = Interactive()
+elif backend == 'dirac':
+    j.application.platform = args.platform
+    j.outputfiles = [LocalFile(args.output)]
+    j.backend = Dirac()
+
+j_args = []
+initjob = args.initjob
+finaljob = args.finaljob
+assert (finaljob >= initjob), "Final job must be >= initial job"
+nsubjobs = finaljob + 1 - initjob
+
+for it_job in range(initjob, initjob + nsubjobs):
+    sjcommand = command.replace("{jobinfo}", str(it_job))
+    print(sjcommand)
+    j_args.append([sjcommand])
+j.splitter = ArgSplitter(args=j_args)
+
+print('Submitting job')
+j.submit()
+
