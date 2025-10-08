@@ -1,0 +1,97 @@
+#!/usr/bin/env ganga
+# Run a job using e.g. ganga ganga-submit --backend dirac  --dstart -2 --dstop 2 --dnum 50 --spacing log --chunk 10 (+ other args: --nperm, --n1sub, --seed, --d1, --d2, --bin, --wrapper, --base)
+
+import argparse
+import os
+import numpy as np
+
+parser = argparse.ArgumentParser(prog='submit-ganga', description='Manages grid job submission')
+parser.add_argument('-p', '--platform',type=str, default='x86_64-centos7-gcc9-opt')
+parser.add_argument('-o', '--output', type=str, default='row_*.csv')
+parser.add_argument('-j', '--jobname', type=str, default='energy-test delta scan')
+parser.add_argument('--backend', type=str, required=True, choices=['dirac', 'local', 'interactive'])
+
+# Inputs / controls
+parser.add_argument('--d1', default='Sample2_20000.txt')
+parser.add_argument('--d2', default='Sample3_20000.txt')
+parser.add_argument('--bin', default='energy_test')
+parser.add_argument('--wrapper', default='run_energy_test.sh')
+
+parser.add_argument('--nperm', type=int, default=100000)
+parser.add_argument('--n1sub', type=int, default=150)
+parser.add_argument('--seed',  type=int, default=12345)
+parser.add_argument('--base',  type=str, default='energy_scan')
+
+# Delta grid (inclusive of ends)
+parser.add_argument('--dstart', type=str, default='1')
+parser.add_argument('--dstop',  type=str, default='3')
+parser.add_argument('--dstep',  type=str, default='0.10')
+parser.add_argument('--dnum',  type=int, default=1000, help='number of deltas to generate (overrides dstep)')
+parser.add_argument('--spacing', type=str, required=True, choices=['linear','log'], default='log')
+parser.add_argument('--chunk', type=int, default=500, help='number of deltas per chunk (subjob)')
+
+parser.add_argument('command', type=str, nargs='*')
+args = parser.parse_args()
+backend = args.backend
+
+# Preflight checklist so we're not wasting grid resources if these are not met
+if not os.path.exists(args.bin): raise RuntimeError(f"{args.bin} not found")
+if os.path.getsize(args.bin) == 0: raise RuntimeError(f"{args.bin} is empty")
+if not os.path.exists(args.wrapper): raise RuntimeError(f"{args.wrapper} not found")
+os.chmod(args.wrapper, 0o755) # Ensure executable
+for d in (args.d1, args.d2):
+    if not os.path.exists(d): raise RuntimeError(f"{d} not found")
+
+# Deltas
+# Logspace requires dstart, dstop, dnum. Linear requires dstart, dstop, dstep.
+dstart, dstop, dstep, dnum = float(args.dstart), float(args.dstop), float(args.dstep), int(args.dnum)
+
+if args.spacing == 'log':
+    deltas = list(np.logspace(dstart, dstop, dnum))
+elif args.spacing == 'linear':
+    if dstep <= 0:
+        raise RuntimeError("--dstep must be > 0")
+    if '--dstep' not in os.sys.argv:
+        parser.error("--dstep is required when --spacing is 'linear'")
+    deltas = list(np.arange(dstart, dstop+dstep/2, dstep))
+else:
+    raise RuntimeError("Invalid --spacing")
+
+if not deltas:
+    raise RuntimeError("No deltas generated")
+
+# Split into 1D arrays (chunks) with up to {chunk} deltas each for subjobs
+chunk_size = args.chunk
+delta_chunks = [deltas[i:i + chunk_size] for i in range(0, len(deltas), chunk_size)]
+print(f"Creating job with {len(delta_chunks)} subjobs (chunks) over deltas {delta_chunks[0][0]} … {delta_chunks[-1][-1]}")
+
+# Job
+j = Job(name=args.jobname)
+j.application = Executable()
+j.application.exe = File(args.wrapper)
+j.inputfiles = [LocalFile(args.wrapper), LocalFile(args.bin), LocalFile(args.d1), LocalFile(args.d2)]
+j.outputfiles = [LocalFile(args.output)]
+
+if backend == 'interactive' or backend == 'local':
+    j.backend = Interactive()
+else:
+    j.backend = Dirac()
+    j.application.platform = args.platform
+
+# Start one subjob per delta chunk
+j_args = []
+for d in delta_chunks:
+    deltas_str = ','.join(repr(float(x)) for x in d) # Deltas has to be a comma-separated string for argsplitter
+    cmd = [
+        '--d1', args.d1, '--d2', args.d2,
+        '--nperm', str(args.nperm),
+        '--n1sub', str(args.n1sub),
+        '--seed',  str(args.seed),
+        '--deltas', deltas_str,
+        '--base',  args.base,
+    ]
+    j_args.append(cmd)
+
+j.splitter = ArgSplitter(args=j_args)
+print('Submitting job')
+j.submit()
