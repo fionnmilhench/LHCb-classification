@@ -7,7 +7,7 @@ import numpy as np
 
 parser = argparse.ArgumentParser(prog='submit-ganga', description='Manages grid job submission')
 parser.add_argument('-p', '--platform',type=str, default='x86_64-centos7-gcc9-opt')
-parser.add_argument('-o', '--output', type=str, default='row_*.csv')
+parser.add_argument('-o', '--output', type=str, default='*.csv')
 parser.add_argument('-j', '--jobname', type=str, default='energy-test delta scan')
 parser.add_argument('--backend', type=str, required=True, choices=['dirac', 'local', 'interactive'])
 
