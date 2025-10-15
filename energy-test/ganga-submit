@@ -28,7 +28,7 @@ parser.add_argument('--dstop',  type=str, default='3')
 parser.add_argument('--dstep',  type=str, default='0.10')
 parser.add_argument('--dnum',  type=int, default=1000, help='number of deltas to generate (overrides dstep)')
 parser.add_argument('--spacing', type=str, required=True, choices=['linear','log'], default='log')
-parser.add_argument('--chunk', type=int, default=500, help='number of deltas per chunk (subjob)')
+parser.add_argument('--chunk', type=int, default=175, help='number of deltas per chunk (subjob)')
 
 parser.add_argument('command', type=str, nargs='*')
 args = parser.parse_args()
