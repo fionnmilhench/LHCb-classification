@@ -12,5 +12,5 @@ energy-test/results/*
 *.root
 *_20000.txt
 *_*.txt
-miranda-test/miranda_results.csv
+*.csv
 synthetic-datasets/datasets/*
