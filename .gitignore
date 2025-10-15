@@ -1,6 +1,9 @@
 # Ignore Jupyter checkpoints
 *.ipynb_checkpoints
 
+# The ganga_test directory was just sample code from Will, not part of the project
+ganga_test/*
+
 # Ignore plots and results, git is for code.
 energy-test/plots/*
 energy-test/results/*
@@ -8,3 +11,6 @@ energy-test/results/*
 # Ignore raw/processed data
 *.root
 *_20000.txt
+*_*.txt
+miranda-test/miranda_results.csv
+synthetic-datasets/datasets/*
