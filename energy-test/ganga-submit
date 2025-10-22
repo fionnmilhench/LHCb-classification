@@ -21,6 +21,7 @@ parser.add_argument('--nperm', type=int, default=100000)
 parser.add_argument('--n1sub', type=int, default=150)
 parser.add_argument('--seed',  type=int, default=12345)
 parser.add_argument('--base',  type=str, default='energy_scan')
+parser.add_argument('--kernel', type=str, default='gaussian')
 
 # Delta grid (inclusive of ends)
 parser.add_argument('--dstart', type=str, default='1')
@@ -89,6 +90,7 @@ for d in delta_chunks:
         '--seed',  str(args.seed),
         '--deltas', deltas_str,
         '--base',  args.base,
+        '--kernel', args.kernel,
     ]
     j_args.append(cmd)
 

@@ -12,23 +12,67 @@
 
 #include <args.hxx>
 
+// Kernel selector: 0=gaussian (default), 1=lognormal, 2=step, 3=lorentzian
+static int g_kernel_id = 0;
 double delta = 0.5;
 double divisor = 2 / (256.0 * 2 * delta * delta);
+static double g_inv_sigma_ln = 1.0;         // 1/(sqrt(2)*sigma) with sigma=delta
+static constexpr double g_eps_ln = 1e-300;  // shared epsilon for lognormal
+
+// Alternative kernels
+static inline double kernel_lognormal(double x) {
+    // ln(d) = 0.5*ln(x); add epsilon to avoid log(0)
+    const double eps = 1e-300;
+    const double z = 0.5 * std::log(x + eps) * g_inv_sigma_ln; // g_inv_sigma_ln set once after parsing delta
+    return 0.5 * std::erfc(z);
+}
+
+
+static inline double kernel_step(double x) {
+    // Indicator within radius delta
+    return (x <= delta * delta) ? 1.0 : 0.0;
+}
+
+static inline double kernel_lorentzian(double x) {
+    // psi(d) = 1 / (1 + (d/delta)^2), with x = d^2
+    return 1.0 / (1.0 + x / (delta * delta));
+}
 
 #define EXACT 1
 
 #if EXACT
 double my_exp(double x) {
-    return std::exp(-x/(delta*delta));
+    // Kernel dispatch
+    if (g_kernel_id == 0) {
+        return std::exp(-x/(delta*delta));
+    } else if (g_kernel_id == 1) {
+        return kernel_lognormal(x);
+    } else if (g_kernel_id == 2) { // step
+        return kernel_step(x);
+    } else if (g_kernel_id == 3){ // lorentzian
+        return kernel_lorentzian(x);
+    }
+    return 0.0;
 }
 #else
 double my_exp(double x) {
-    x = std::max(1 - x * divisor, 0.0);
-    x *= x; x *= x; x *= x; x *= x;
-    x *= x; x *= x; x *= x; x *= x;
-    return x;
+    // Kernel dispatch; keep original fast polynomial only for the Gaussian case
+    if (g_kernel_id == 0) {
+        x = std::max(1 - x * divisor, 0.0);
+        x *= x; x *= x; x *= x; x *= x;
+        x *= x; x *= x; x *= x; x *= x;
+        return x;
+    } else if (g_kernel_id == 1) {//lognormal
+        return kernel_lognormal(x);
+    } else if (g_kernel_id == 2) { // step
+        return kernel_step(x);
+    } else if (g_kernel_id == 3) { // lorentzian
+        return kernel_lorentzian(x);
+    }
+    return 0.0;
 }
 #endif
+
 
 struct Event {
   double s12;
@@ -143,6 +187,7 @@ int run_energy_test(int argc, char *argv[]) {
   args::ValueFlag<size_t> max_permutation_events_1(parser, "max permutation events 1", "Max number of events in dataset 1 for permutations",
                                                    {"max-permutation-events-1"});
   args::ValueFlag<double> delta_value(parser, "delta value", "delta_value", {"delta-value"});
+  args::ValueFlag<std::string> kernel_flag(parser, "kernel", "Kernel type: gaussian|lognormal|step|lorentzian", {"kernel"});
   args::ValueFlag<std::string> ti_output_fn_1(parser, "ti output filename 1", "Output filename for individual contributions to test statistic from dataset 1", {"ti-output-fn-1"});
   args::ValueFlag<std::string> ti_output_fn_2(parser, "ti output filename 2", "Output filename for individual contributions to test statistic from dataset 2", {"ti-output-fn-2"});
   args::ValueFlag<std::string> permutation_ti_minmax_output_fn(parser, "permutation ti min-max filename", "Output filename for the minimum and maximum Ti values from permutations", {"permutation-ti-minmax-output-fn"});
@@ -176,7 +221,22 @@ int run_energy_test(int argc, char *argv[]) {
   std::cout<<"Distance parameter set to "<< delta <<std::endl;
   divisor = 2 / (256.0 * 2 * delta * delta);
  
-    
+  if (kernel_flag) {
+    const auto k = args::get(kernel_flag);
+    if (k == "gaussian") {
+        g_kernel_id = 0;
+    } else if (k == "lognormal") {
+        g_kernel_id = 1;
+    } else if (k == "step") {
+        g_kernel_id = 2;
+    } else if (k == "lorentzian") {
+        g_kernel_id = 3;
+    } else {
+        throw args::ParseError("Unknown --kernel type (use: gaussian|lognormal|step|lorentzian)");
+    }
+    std::cout << "Kernel type set to " << k << std::endl;
+  }
+
   
   // Parse the maximum number of events to use
   size_t data_1_limit = std::numeric_limits<size_t>::max();
