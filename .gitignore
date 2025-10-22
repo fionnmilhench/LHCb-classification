@@ -14,3 +14,4 @@ energy-test/results/*
 *_*.txt
 *.csv
 synthetic-datasets/datasets/*
+energy-test/pvalues.txt
